@@ -1,5 +1,5 @@
 # run_litreview.py
-import asyncio, os, json, datetime, traceback
+import asyncio, os, json, re, datetime, traceback
 from pathlib import Path
 from dotenv import load_dotenv
 from gpt_researcher import GPTResearcher
@@ -39,12 +39,47 @@ SCOPES = {
     },
 }
 
+S2_CORPUS = Path("s2_corpus.json")
+
+def _s2_context_from_sources(name: str) -> list[str]:
+    """Build Title/Content/Source context from s2_corpus using arxiv IDs in sources.json."""
+    sources_path = OUT / f"{name}_sources.json"
+    if not sources_path.exists() or not S2_CORPUS.exists():
+        return []
+    sources = json.loads(sources_path.read_text())
+    arxiv_ids = set()
+    for s in sources:
+        m = re.search(r"arxiv\.org/(?:pdf|abs|html)/(\d{4}\.\d+)", s.get("url", ""))
+        if m:
+            arxiv_ids.add(m.group(1))
+    if not arxiv_ids:
+        return []
+    corpus = json.loads(S2_CORPUS.read_text())
+    by_id = {p.get("externalIds", {}).get("ArXiv", ""): p for p in corpus}
+    chunks = []
+    for aid in arxiv_ids:
+        p = by_id.get(aid)
+        if p and p.get("abstract"):
+            url = p.get("url") or f"https://arxiv.org/abs/{aid}"
+            chunks.append(f"Title: {p['title']}\nContent: {p['abstract']}\nSource: {url}")
+    return chunks
+
+
 async def run_scope(name, spec):
     ts = datetime.datetime.now().isoformat(timespec="seconds")
     try:
         os.environ["RETRIEVER"] = spec["retriever"]           # per-scope override
-        r = GPTResearcher(query=spec["query"], report_type="detailed_report", verbose=True)
+        r = GPTResearcher(query=spec["query"], report_type="research_report", verbose=True)
         await r.conduct_research()
+
+        # Always prepend s2 abstracts so the LLM has real paper content even when
+        # CURATE_SOURCES strips arxiv-PDF entries (which arrive with blank titles and
+        # fail the credibility filter, leaving hollow shell entries in r.context).
+        s2_chunks = _s2_context_from_sources(name)
+        if s2_chunks:
+            print(f"[{name}] Prepending {len(s2_chunks)} s2 abstracts to context")
+            r.context = s2_chunks + list(r.context or [])
+
         report = await r.write_report(custom_prompt=EXTRACTION_PROMPT)
 
         (OUT / f"{name}.md").write_text(report)

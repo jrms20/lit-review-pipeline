@@ -49,12 +49,18 @@ def _process_health():
 def _anchor_coverage():
     hits: dict[str, list[str]] = {a: [] for a, _ in ANCHORS}
     for scope in SCOPES:
-        p = OUT / f"{scope}_sources.json"
-        if not p.exists():
-            continue
-        text = p.read_text().lower()
+        # Search report text (primary) + sources.json with normalised separators (fallback)
+        texts = []
+        report_p = OUT / f"{scope}.md"
+        if report_p.exists():
+            texts.append(report_p.read_text().lower())
+        sources_p = OUT / f"{scope}_sources.json"
+        if sources_p.exists():
+            # normalise hyphens/underscores to spaces so URL fragments match
+            texts.append(re.sub(r"[-_]", " ", sources_p.read_text().lower()))
+        combined = "\n".join(texts)
         for anchor, _ in ANCHORS:
-            if anchor in text:
+            if anchor in combined:
                 hits[anchor].append(scope)
     return hits
 
@@ -124,7 +130,8 @@ Rules:
         max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
     )
-    text = resp.content[0].text
+    block = resp.content[0]
+    text = block.text if hasattr(block, "text") else ""
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if m:
         try:

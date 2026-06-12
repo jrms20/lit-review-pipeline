@@ -18,15 +18,27 @@ REPORT_FILES = [
 
 def check_arxiv(arxiv_id):
     clean_id = re.sub(r"v\d+$", "", arxiv_id)
-    r = requests.get(ARXIV_API, params={"id_list": clean_id}, timeout=15)
-    r.raise_for_status()
-    total = re.search(
-        r"<opensearch:totalResults[^>]*>(\d+)</opensearch:totalResults>", r.text
-    )
-    if total and int(total.group(1)) == 0:
-        return None, False
-    title = re.search(r"<entry>.*?<title>(.*?)</title>", r.text, re.DOTALL)
-    return (title.group(1).strip() if title else "(title unavailable)"), True
+    for attempt in range(4):
+        try:
+            r = requests.get(ARXIV_API, params={"id_list": clean_id}, timeout=15)
+            if r.status_code == 429:
+                wait = 10 * (2 ** attempt)
+                print(f"    [rate-limited, waiting {wait}s]")
+                time.sleep(wait)
+                continue
+            r.raise_for_status()
+            total = re.search(
+                r"<opensearch:totalResults[^>]*>(\d+)</opensearch:totalResults>", r.text
+            )
+            if total and int(total.group(1)) == 0:
+                return None, False
+            title = re.search(r"<entry>.*?<title>(.*?)</title>", r.text, re.DOTALL)
+            return (title.group(1).strip() if title else "(title unavailable)"), True
+        except requests.RequestException as e:
+            if attempt == 3:
+                raise
+            time.sleep(5)
+    return None, False
 
 def main():
     all_ids: dict[str, list[str]] = {}
