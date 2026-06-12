@@ -1,0 +1,28 @@
+You are compiling a structured literature survey for a defence-design project against
+Boundary Point Jailbreaking (BPJ): a fully black-box, iterative jailbreak on LLM safety
+classifiers that observes only a single bit per query (flagged / not flagged), uses very
+high query volume (hundreds of thousands of queries) and produces a characteristic
+flag-rate signature, and learns a universal transferable adversarial prefix.
+
+From the research context, produce the report in TWO parts:
+
+PART 1 — EVIDENCE TABLE. A single Markdown table with one row PER PAPER and these columns:
+citation | tldr | defence_mechanism | attacker_model | operating_level | domain |
+detection_signal | deployability | effectiveness | bpj_relevance | adaptive_response
+
+Use the controlled vocabularies:
+- defence_mechanism: input-filter/classifier | stateful/cross-query-detection |
+  rate-limit/query-budget | anomaly-detection/SPC | moving-target/randomisation |
+  account/session-reputation | attack-only
+- operating_level: single-interaction | batch | session | account | population
+- attacker_model: state {white|grey|black}-box AND feedback granularity
+  {gradients|scores|hard-label-single-bit} AND query budget AND whether universal/transfer.
+Be explicit when a paper is attack-only (no defence) — those still matter as threat models.
+
+PART 2 — SYNTHESIS. 4-8 short paragraphs: cluster the defences by operating_level;
+call out which cross-interaction (batch/session/account) signals look most transferable
+to BPJ's flag-rate signature; and flag gaps where no existing defence cleanly applies.
+
+Rules: every paper must be a real source from the provided context — do NOT invent
+citations or arXiv IDs. If a field is unknown, write "n/a" rather than guessing.
+Prefer recall: include borderline-relevant papers and mark bpj_relevance=low.
